@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2026 by darenazhekbarovaboba-source (http://jsbin.com/lejuxez/2/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>DDoS Monitor</title>
+    <link rel="stylesheet" href="style.css">
+<style id="jsbin-css">
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    height: 100vh;
+    background: #0b0f14;
+    font-family: monospace;
+    color: #00ff99;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.panel {
+    width: 380px;
+    border: 2px solid #00ff99;
+    padding: 20px;
+    box-shadow: 0 0 25px rgba(0,255,153,.25);
+}
+
+h1 {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.metric {
+    margin-bottom: 15px;
+}
+
+.bar {
+    width: 100%;
+    height: 12px;
+    background: #111;
+    border: 1px solid #00ff99;
+    margin-top: 5px;
+}
+
+.fill {
+    height: 100%;
+    width: 0%;
+    background: #00ff99;
+    transition: width .3s ease, background .3s ease;
+}
+
+.status {
+    text-align: center;
+    font-weight: bold;
+    padding: 10px;
+    margin: 15px 0;
+    border: 1px solid;
+}
+
+.normal {
+    color: #00ff99;
+    border-color: #00ff99;
+}
+
+.warning {
+    color: #ffaa00;
+    border-color: #ffaa00;
+}
+
+.danger {
+    color: #ff0033;
+    border-color: #ff0033;
+}
+
+.log {
+    background: #05080d;
+    border: 1px solid #00ff99;
+    height: 140px;
+    overflow-y: auto;
+    padding: 6px;
+    font-size: 12px;
+}
+</style>
+</head>
+<body>
+
+<div class="panel">
+    <h1>DDoS Monitor</h1>
+
+    <div class="stat">
+        Requests / sec: <span id="rps">0</span>
+        <div class="bar">
+            <div class="fill" id="rpsBar"></div>
+        </div>
+    </div>
+
+    <div class="status normal" id="status">NORMAL</div>
+
+    <div class="log" id="log"></div>
+</div>
+
+<script src="script.js"></script>
+<script id="jsbin-javascript">
+// ===============================
+// CONFIG
+// ===============================
+const NORMAL_RPS = 50;
+const WARNING_RPS = 150;
+
+const CHECK_INTERVAL = 1000;
+const PING_URL = location.href; // пинг текущей страницы
+
+// ===============================
+// STATE
+// ===============================
+let totalRequests = 0;
+let lastRequests = 0;
+let latencySamples = [];
+
+// ===============================
+// UTILS
+// ===============================
+function log(msg) {
+    const el = document.getElementById("log");
+    const time = new Date().toLocaleTimeString();
+    el.innerHTML += `[${time}] ${msg}<br>`;
+    el.scrollTop = el.scrollHeight;
+}
+
+// ===============================
+// TRAFFIC SIMULATION (demo)
+// ===============================
+// УБЕРИ этот блок, если подключаешь к реальному backend
+setInterval(() => {
+    const burst = Math.random() < 0.15 ? 200 : 10;
+    totalRequests += burst;
+}, 1000);
+
+// ===============================
+// REALISTIC PING (latency)
+// ===============================
+async function pingServer() {
+    const start = performance.now();
+    try {
+        await fetch(PING_URL, { cache: "no-store" });
+        const latency = Math.round(performance.now() - start);
+        latencySamples.push(latency);
+        if (latencySamples.length > 10) latencySamples.shift();
+    } catch {
+        latencySamples.push(1000);
+    }
+}
+
+// ===============================
+// ANALYSIS LOOP
+// ===============================
+setInterval(async () => {
+    await pingServer();
+
+    const rps = totalRequests - lastRequests;
+    lastRequests = totalRequests;
+
+    const avgLatency =
+        latencySamples.reduce((a, b) => a + b, 0) /
+        (latencySamples.length || 1);
+
+    // UI
+    document.getElementById("rps").textContent = rps;
+    document.getElementById("latency").textContent = Math.round(avgLatency);
+
+    const bar = document.getElementById("rpsBar");
+    const status = document.getElementById("status");
+
+    bar.style.width = Math.min(100, rps / 3) + "%";
+
+    if (rps < NORMAL_RPS && avgLatency < 300) {
+        status.textContent = "NORMAL";
+        status.className = "status normal";
+        bar.style.background = "#00ff99";
+        log("Normal traffic");
+    }
+    else if (rps < WARNING_RPS || avgLatency < 700) {
+        status.textContent = "HIGH LOAD";
+        status.className = "status warning";
+        bar.style.background = "#ffaa00";
+        log("High load detected");
+    }
+    else {
+        status.textContent = "POSSIBLE DDOS";
+        status.className = "status danger";
+        bar.style.background = "#ff0033";
+        log("⚠ Possible DDoS activity");
+    }
+
+}, CHECK_INTERVAL);
+</script>
+</body>
+</html>
